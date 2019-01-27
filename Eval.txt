@@ -1,0 +1,115 @@
+Importer :
+https://www.csvjson.com/csv2json
+
+"C:\Program Files\MongoDB\Server\4.0\bin\mongoimport.exe" --jsonArray --host localhost:27017 --db europe --collection eu < "C:\Users\Dell\Desktop\Eval\Europe.json"
+
+use europe
+show dbs
+show collections
+db.eu.find().pretty()
+
+
+A - Densité de population :
+Superficie:
+Donner la superficie de l'Europe :
+db.eu.aggregate([{$group:{_id:'',"La superficie totale de l'Europe est de ":{$sum:"$Superficie (km2)"}}}])
+
+Donner le plus petit pays :
+db.eu.find().sort({"Superficie (km2)":1}).limit(1)
+
+Donner le plus grand pays :
+db.eu.find().sort({"Superficie (km2)":-1}).limit(1)
+
+Population:
+https://www.csvjson.com/csv2json
+"C:\Program Files\MongoDB\Server\4.0\bin\mongoimport.exe" --jsonArray --host localhost:27017 --db europe --collection population < "C:\Users\Dell\Desktop\Eval\population.json"
+1.Donner la population de l'Europe :
+db.population.find({GEO:{$regex:/Union/}}).sort({"Value":-1}).limit(1)
+
+2.Donner le pays le moins peuplé :
+db.population.find().sort({"Value":1}).limit(1)
+
+Donner le pays le plus peuplé :
+db.population.remove({"GEO":/Union/})
+db.population.remove({"GEO":/Espace/})
+db.population.remove({"GEO":/Zone/})
+
+db.population.find().sort({"Value":-1}).limit(1)
+
+3.Donner leur densité (Python) :
+
+
+B - Criminalité :
+https://www.csvjson.com/csv2json
+"C:\Program Files\MongoDB\Server\4.0\bin\mongoimport.exe" --jsonArray --host localhost:27017 --db criminalite --collection crime < "C:\Users\Dell\Desktop\Eval\crime.json"
+
+1.Donner les pays d'Europe ayant le plus de cambriolages en 2007 :
+- db.crime.find({TIME:2007, ICCS:/Cambriolage/}, {TIME:1, GEO:1, Value:1, _id:0}).sort({"Value":-1}).limit(3)
+- db.crime.aggregate([{$lookup:{from:"eu",localField:"GEO",foreignField:"Etats membres",as:"paystest"}},{$match:{"ICCS":/Camb/,"Value":{"$exists":1},"paystest":{$ne:[]}, "TIME":2007}},{$group:{_id:{"date" :"$TIME",pays:"$paystest.Etats membres"}, "total":{$min:"$Value"}}},{$sort:{"total":-1}},{$limit:1}])
+
+1.1.Donner les pays d'Europe ayant le moins de cambriolages en 2007 :
+- db.crime.find({TIME:2007, ICCS:/Cambriolage/}, {TIME:1, GEO:1, Value:1, _id:0}).sort({"Value":-1}).limit(4)
+- db.crime.aggregate([{$lookup:{from:"eu",localField:"GEO",foreignField:"Etats membres",as:"paystest"}},{$match:{"ICCS":/Camb/,"Value":{"$exists":1},"paystest":{$ne:[]}, "TIME":2007}},{$group:{_id:{"date" :"$TIME",pays:"$paystest.Etats membres"}, "total":{$min:"$Value"}}},{$sort:{"total":1}},{$limit:1}])
+
+2.Donner le pays et l'année avec le moins de meurtres :
+db.crime.find({ICCS:/Homicide/, Value:{"$exists":1}}, {TIME:1, GEO:1, Value:1, _id:0}).sort({"Value":1}).limit(1)
+db.crime.find({GEO : "Malte", ICCS:/Homicide/, Value:{"$exists":1}}, {TIME:1, GEO:1, Value:1, _id:0}).sort({"Value":1}).limit(1)
+
+3.Donner le pays européen avec le moins de meurtres cumulés (année) :
+db.crime.aggregate([{$group:{_id:{'GEO':"$GEO", "TIME":"$TIME"},"Le pays européen avec le moins de meurtres cumulés est de ":{$sum:"$Value"}}}, {$limit:6}])
+db.crime.aggregate([{$lookup:{from:"evaluation",localField:"GEO",foreignField:"États_membres",as:"paystest"}},{$match:{"ICCS":/Homi/,"Value":{"$exists":1},"paystest":{$ne:[]}}},{$group:{_id:{pays:"$paystest.États_membres"}, "total":{$sum:"$Value"}}},{$sort:{"total":1}},{$limit:1}])
+{ "_id" : { "pays" : [ "Malte" ] }, "total" : 44 }
+
+4.Dans quel pays risque-t-on le plus et le moins d'être blessé :
+- db.crime.find({Value:{"$exists":1}}, {TIME:1, GEO:1, Value:1, _id:0}).sort({"Value":1}).limit(10)
+- db.crime.aggregate([{$match:{"Value":{"$exists":1}}},{$group:{_id:{pays:"$GEO"}, "total":{$avg:"$Value"}}},{$sort:{"total":-1}},{$limit:1}])
+
+C - Police :
+1.Donner la moyenne des effectifs par pays :
+db.police.aggregate([{$group:{_id:{'GEO':"$GEO"},"La moyenne des effectifs par pays est de ":{$avg:"$Value"}}}])
+
+2. Le pays avec l'effectif le plus grand pour l'année en 2002 :
+db.police.find({TIME:2002}, {TIME:1, GEO:1, Value:1, _id:0}).sort({"Value":-1}).limit(1)
+
+3.
+
+
+D - Prison :
+http://www.convertcsv.com/csv-to-json.htm
+db.prison.find().forEach( function (x) {x.Value = parseInt(x.Value); db.prison.save(x);});
+db.prison.remove({Value:NaN})
+
+1.Le pays le plus carcéral dans le temps est :
+db.prison.aggregate([{$match:{"Value":{"$exists":1}}},{$group:{_id:{pays:"$GEO"}, "total":{$avg:"$Value"}}},{$sort:{"total":-1}},{$limit:1}])
+
+2.Le pays le moins carcéral dans le temps est :
+db.prison.aggregate([{$match:{"Value":{"$exists":1}}},{$group:{_id:{pays:"$GEO"}, "total":{$avg:"$Value"}}},{$sort:{"total":1}},{$limit:1}])
+
+3.L'année la plus carcérale est :
+db.prison.aggregate([{$match:{"Value":{"$exists":1}}},{$group:{_id:{annee:"$TIME"}, "total":{$avg:"$Value"}}},{$sort:{"total":-1}},{$limit:1}])
+
+
+E - Santé :
+http://www.convertcsv.com/csv-to-json.htm
+db.sante.find().forEach( function (x) { x.Value = parseInt(x.Value); db.sante.save(x); });
+db.sante.remove({Value:NaN})
+
+1. On dépense le plus de soins par habitants à :
+db.sante.aggregate([{$match:{"Value":{"$exists":1}, UNIT:{$regex:/Euro par h/}, SPDEPS:{$regex:/Soins de/}}},{$group:{_id:{pays:"$GEO", annee:"$TIME"}, "total":{$avg:"$Value"}}},{$sort:{"total":-1}},{$limit:1}])
+
+db.sante.aggregate([{$match:{"Value":{"$exists":1},"UNIT":/habitant/,"SPDEPS":/^Mal/}},{$group:{_id:{Pays:"$GEO"}, "total":{$max:"$Value"}}},{$sort:{"total":-1}},{$limit:1}])
+
+2.Le taux de change monétaire en 2007 pour la Bulgarie est :
+var a = db.sante.find({TIME:2007, GEO:"Bulgarie", UNIT:{$regex:/prix constants/}}, {Value:1, _id:0}).sort({Value:-1}).limit(1)[0].Value
+a
+4861
+var b = db.sante.find({TIME:2007, GEO:"Bulgarie", UNIT:{$regex:/Millions d'unites/}}, {Value:1, _id:0}).sort({Value:-1}).limit(1)[0].Value
+b
+8513
+a/b
+0.5710090449900153
+b/a
+1.7512857436741411
+
+2.2
+db.sante.aggregate([{$match:{UNIT:/prix constants/}},{$project:{UNIT:1, Value:{$divide:["$Value", 2]}}}])
